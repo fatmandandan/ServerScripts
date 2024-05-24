@@ -75,4 +75,4 @@ then
 else
 	smx8fancontrol -m smart -p $fanset,$fanset,100 -t 42,47,60 -H 2 >> $logdir
 fi
-echo "//end of session//\n" >> $logdir
+echo "//end of the session//\n" >> $logdir
