@@ -1,0 +1,78 @@
+#!/bin/sh
+
+drives="a b c d e f g h i j k l m n o p q r s t u v w x y z aa ab ac ad ae af ag ah ai aj"
+
+maxtemp=0
+targethddtemp=45
+highhddtemp=50
+lowhddtemp=35
+hysterisis=1
+
+fanlevel=$(smx8fancontrol | grep 'Fan1 Output Nonstop Value (F1ONV):' | awk '{print $6}' | sed 's/[^0-9]//g')
+fanset=100
+maxlevel=100
+minlevel=45
+
+logdir="/var/log/hddfancontrol.log"
+
+for drive in $drives
+do
+	wtemp=$(hddtemp /dev/sd$drive | awk '{print $4}' | sed 's/[^0-9]//g')
+	if [ "$wtemp" -ge "$maxtemp" ]
+	then
+		maxtemp=$wtemp
+	fi
+done
+
+#Diagnostic print
+#echo $maxtemp
+#echo $(($maxtemp+$maxtemp))
+
+fandiff=$(($maxtemp-$targethddtemp))
+absfandiff="${fandiff##*[+-]}" 
+
+if [ "$absfandiff" -le "$hysterisis" ]
+then
+        fanset=$fanlevel
+elif [ "$maxtemp" -le "$lowhddtemp" ]
+then
+	fanset=$minlevel
+elif [ "$maxtemp" -ge "$highhddtemp" ]
+then
+	fanset=$maxlevel
+elif [ "$maxtemp" -lt "$targethddtemp" ]
+then
+	fanset=$(($fanlevel-5))
+elif [ "$maxtemp" -gt "$targethddtemp" ]
+then
+	fanset=$(($fanlevel+5))
+else
+	fanset=$maxlevel
+fi
+
+#Error check to avoid inputting bad percentages into control script
+
+if [ "$fanset" -ge "$maxlevel" ]
+then
+	fanset=$maxlevel
+elif [ "$fanset" -le "$minlevel" ]
+then
+	fanset=$minlevel
+else
+	fanset=$fanset
+fi
+#Diagnostic print
+now=$(date +"%T")
+echo "//Current time : $now//" >> $logdir
+echo "Max Temp : $maxtemp" >> $logdir 
+#echo $(($maxtemp+$maxtemp))
+echo "Fan Set Point : $fanset" >> $logdir
+echo "Temp Difference : $absfandiff" >> $logdir
+
+if [ "$fanset" -eq "$fanlevel" ]
+then
+	echo "No Changes Needed" >> $logdir
+else
+	smx8fancontrol -m smart -p $fanset,$fanset,100 -t 42,47,60 -H 2 >> $logdir
+fi
+echo "//end of session//\n" >> $logdir
